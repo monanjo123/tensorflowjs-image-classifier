@@ -1,10 +1,10 @@
 <template>
   <div id="app">
+      <loading :active.sync="isLoading"></loading>
       <md-card>
         <md-card-media class="webcam">
           <Webcam ref='webcam'/>
         </md-card-media>
-
         <md-card-actions>
           <md-card-media-actions>
             <md-card-area>
@@ -26,7 +26,7 @@
                 <md-field>
                     <label>What's on the Camera???</label>
                     <md-input v-model="label" class="md-"></md-input>
-                    <md-button class="md-raised md-primary" v-on:click="addExample">Train</md-button>
+                    <md-button class="md-raised md-primary" @click.prevent="addExample">Train</md-button>
                 </md-field>
               </md-card-content>
             </md-card-area>
@@ -43,6 +43,9 @@ import * as mobilenet from '@tensorflow-models/mobilenet';
 import * as knnClassifier from '@tensorflow-models/knn-classifier';
 import * as tf from '@tensorflow/tfjs'
 import { MdButton, MdCard, MdField } from 'vue-material/dist/components'
+import Loading from 'vue-loading-overlay';
+
+import 'vue-loading-overlay/dist/vue-loading.css';
 import 'vue-material/dist/vue-material.min.css'
 import 'vue-material/dist/theme/default.css'
 
@@ -54,17 +57,20 @@ const classifier = knnClassifier.create();
 let net;
 let webcamElement;
 let data_loaded = false
+let pred;
 
 export default {
   name: 'app',
   data() {
     return {
       prediction: '',
-      confidence: ''
+      confidence: '',
+      isLoading: true,
     }
   },
   components: {
-    Webcam
+    Webcam,
+    Loading
   },
   methods: {
     async get_prelim_data() {
@@ -77,26 +83,31 @@ export default {
         }          
         //console.log(frame_count)
 
-        if (frame_count == 30) {
+        if (frame_count == 50) {
           data_loaded = true
           clearInterval(interval)
+          this.isLoading = false;
         }
         }, 50)
       
     },
     addExample() {
       let classId;
+      if (pred) {
+        clearInterval(pred)
+      }
       this.label ?  classId = this.label : classId = 'No Action'
       //console.log(classId)
       // Get the intermediate activation of MobileNet 'conv_preds' and pass that to the KNN classifier.
       const activation = net.infer(webcamElement, 'conv_preds')
       // Pass the intermediate activation to the classifier.
       classifier.addExample(activation, classId)
+      this.run_prediction()
        
     },
     async run_prediction() {
       // Define a recursive function
-      setInterval(async() => {
+      pred = setInterval(async() => {
         if (classifier.getNumClasses() > 0) {
               const activation = net.infer(webcamElement, 'conv_preds')
               await classifier.predictClass(activation).then(response => {
